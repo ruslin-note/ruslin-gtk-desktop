@@ -1,0 +1,6 @@
+data/org.dianqk.ruslin.desktop.in.in
+data/org.dianqk.ruslin.gschema.xml.in
+data/org.dianqk.ruslin.metainfo.xml.in.in
+data/resources/ui/shortcuts.ui
+data/resources/ui/window.ui
+src/application.rs
