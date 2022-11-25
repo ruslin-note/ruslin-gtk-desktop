@@ -45,7 +45,7 @@ impl SimpleComponent for App {
     }
 
     view! {
-        main_window = gtk::ApplicationWindow::new(&main_application()) {
+        main_window = adw::ApplicationWindow::new(&main_application()) {
             connect_close_request[sender] => move |_| {
                 sender.input(AppMsg::Quit);
                 gtk::Inhibit(true)
@@ -66,14 +66,6 @@ impl SimpleComponent for App {
                 } else {
                     None
                 },
-
-            #[wrap(Some)]
-            set_titlebar = &adw::HeaderBar {
-                pack_end = &gtk::MenuButton {
-                    set_icon_name: "open-menu-symbolic",
-                    set_menu_model: Some(&primary_menu),
-                }
-            },
 
             #[name = "leaflet"]
             adw::Leaflet {
@@ -131,6 +123,11 @@ impl SimpleComponent for App {
                         set_title_widget = &adw::WindowTitle {
                             set_title: "Content",
                         },
+
+                        pack_end = &gtk::MenuButton {
+                            set_icon_name: "open-menu-symbolic",
+                            set_menu_model: Some(&primary_menu),
+                        }
                     },
 
                     gtk::Label {
