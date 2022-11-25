@@ -923,6 +923,8 @@ name = "ruslin"
 version = "0.1.0"
 dependencies = [
  "gettext-rs",
+ "gtk4",
+ "libadwaita",
  "relm4",
  "tracing",
  "tracing-subscriber",

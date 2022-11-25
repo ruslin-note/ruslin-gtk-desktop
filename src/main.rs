@@ -2,6 +2,7 @@
 mod config;
 mod app;
 mod modals;
+mod properties;
 mod setup;
 
 use gtk::prelude::ApplicationExt;

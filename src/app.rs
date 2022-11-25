@@ -1,22 +1,25 @@
+use adw::prelude::*;
+use gtk::prelude::{ApplicationExt, ApplicationWindowExt, GtkWindowExt, SettingsExt, WidgetExt};
+use gtk::{gio, glib};
 use relm4::{
     actions::{ActionGroupName, RelmAction, RelmActionGroup},
     gtk, main_application, Component, ComponentController, ComponentParts, ComponentSender,
     Controller, SimpleComponent,
 };
 
-use gtk::prelude::{ApplicationExt, ApplicationWindowExt, GtkWindowExt, SettingsExt, WidgetExt};
-use gtk::{gio, glib};
-
 use crate::config::{APP_ID, PROFILE};
 use crate::modals::about::AboutDialog;
+use crate::properties;
 
 pub(super) struct App {
     about_dialog: Controller<AboutDialog>,
+    current_note_index: u32,
 }
 
 #[derive(Debug)]
 pub(super) enum AppMsg {
     Quit,
+    SelectNote(u32),
 }
 
 relm4::new_action_group!(pub(super) WindowActionGroup, "win");
@@ -65,16 +68,78 @@ impl SimpleComponent for App {
                 },
 
             #[wrap(Some)]
-            set_titlebar = &gtk::HeaderBar {
+            set_titlebar = &adw::HeaderBar {
                 pack_end = &gtk::MenuButton {
                     set_icon_name: "open-menu-symbolic",
                     set_menu_model: Some(&primary_menu),
                 }
             },
 
-            gtk::Label {
-                set_label: "Hello world!",
-                add_css_class: "title-header",
+            #[name = "leaflet"]
+            adw::Leaflet {
+                set_can_navigate_back: true,
+
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+
+                    #[name = "sidebar_header"]
+                    adw::HeaderBar {
+                        #[wrap(Some)]
+                        set_title_widget = &adw::WindowTitle {
+                            set_title: "Notes",
+                        },
+                    },
+
+                    gtk::ListBox {
+                        set_selection_mode: gtk::SelectionMode::Single,
+
+                        adw::ActionRow {
+                            set_title: "Note 1",
+                        },
+
+                        adw::ActionRow {
+                            set_title: "Note 2",
+                        },
+
+                        adw::ActionRow {
+                            set_title: "Note 3",
+                        },
+
+                        connect_row_selected[sender] => move |_, row| {
+                            if let Some(row) = row {
+                                sender.input(AppMsg::SelectNote((row.index() + 1) as u32));
+                            }
+                        }
+                    }
+                },
+
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_hexpand: true,
+
+                    #[name = "content_header"]
+                    adw::HeaderBar {
+                        #[name = "back_button"]
+                        pack_start = &gtk::Button {
+                            set_icon_name: "go-previous-symbolic",
+                            connect_clicked[leaflet] => move |_| {
+                                leaflet.navigate(adw::NavigationDirection::Back);
+                            }
+                        },
+
+                        #[wrap(Some)]
+                        set_title_widget = &adw::WindowTitle {
+                            set_title: "Content",
+                        },
+                    },
+
+                    gtk::Label {
+                        set_vexpand: true,
+
+                        #[watch]
+                        set_text: &format!("Page {}", model.current_note_index),
+                    }
+                },
             }
         }
     }
@@ -89,9 +154,40 @@ impl SimpleComponent for App {
             .launch(())
             .detach();
 
-        let model = Self { about_dialog };
+        let model = Self {
+            about_dialog,
+            current_note_index: 0,
+        };
 
         let widgets = view_output!();
+
+        widgets
+            .leaflet
+            .bind_property(
+                properties::folded(),
+                &widgets.sidebar_header,
+                properties::show_end_title_buttons(),
+            )
+            .flags(glib::BindingFlags::SYNC_CREATE)
+            .build();
+        widgets
+            .leaflet
+            .bind_property(
+                properties::folded(),
+                &widgets.content_header,
+                properties::show_start_title_buttons(),
+            ) // ? https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/class.HeaderBar.html
+            .flags(glib::BindingFlags::SYNC_CREATE)
+            .build();
+        widgets
+            .leaflet
+            .bind_property(
+                properties::folded(),
+                &widgets.back_button,
+                properties::visible(),
+            )
+            .flags(glib::BindingFlags::SYNC_CREATE)
+            .build();
 
         let actions = RelmActionGroup::<WindowActionGroup>::new();
 
@@ -124,7 +220,17 @@ impl SimpleComponent for App {
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
             AppMsg::Quit => main_application().quit(),
+            AppMsg::SelectNote(index) => self.current_note_index = index,
         }
+    }
+
+    fn pre_view() {
+        /*
+           https://relm4.org/book/next/component_macro_reference.html?highlight=pre_view#manual-view
+           You can also implement your own view logic, which will be added to the view code that the view macro generates.
+           Code inside pre_view() will run before the view update, while post_view() will run after.
+        */
+        widgets.leaflet.navigate(adw::NavigationDirection::Forward);
     }
 
     fn shutdown(&mut self, widgets: &mut Self::Widgets, _output: relm4::Sender<Self::Output>) {
