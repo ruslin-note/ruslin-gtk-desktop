@@ -1559,6 +1559,7 @@ dependencies = [
  "sourceview5",
  "tracing",
  "tracing-subscriber",
+ "tracker",
 ]
 
 [[package]]
@@ -2045,6 +2046,26 @@ dependencies = [
  "thread_local",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tracker"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5458a19f88ae9feb85b92b6c46adc1f5166efb15ceb1fdd57fedfe3c184af174"
+dependencies = [
+ "tracker-macros",
+]
+
+[[package]]
+name = "tracker-macros"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cac6de426774c1356e0d02c8735887fa8c7625fab19b6876a1cf88046306057"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

@@ -8,7 +8,7 @@ mod modals;
 mod properties;
 mod setup;
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use gtk::prelude::ApplicationExt;
 use relm4::{

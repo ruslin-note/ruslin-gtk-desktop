@@ -2,7 +2,7 @@ use adw::prelude::*;
 use relm4::{
     factory::FactoryVecDeque, gtk, prelude::*, ComponentParts, ComponentSender, SimpleComponent,
 };
-use ruslin_data::{AbbrNote, FolderID};
+use ruslin_data::{AbbrNote, FolderID, NoteID};
 
 use crate::{icons, AppContext};
 
@@ -23,7 +23,7 @@ impl FactoryComponent for NoteItemModel {
     type Output = NoteItemOutput;
     type CommandOutput = ();
     type Widgets = NoteItemWidgets;
-    type ParentInput = NoteListColumInput;
+    type ParentInput = NoteListColumnInput;
     type ParentWidget = gtk::ListBox;
 
     view! {
@@ -41,6 +41,7 @@ impl FactoryComponent for NoteItemModel {
 pub struct NoteListColumnModel {
     ctx: AppContext,
     notes: FactoryVecDeque<NoteItemModel>,
+    folder_id: Option<FolderID>,
 }
 
 pub struct NoteListColumInit {
@@ -48,19 +49,22 @@ pub struct NoteListColumInit {
 }
 
 #[derive(Debug)]
-pub enum NoteListColumInput {
+pub enum NoteListColumnInput {
     RefreshNotes(Option<FolderID>),
+    SelectNote(usize),
+    CreateNote,
 }
 
 #[derive(Debug)]
 pub enum NoteListColumnOutput {
-    SelectNote(String),
+    SelectNote(NoteID),
+    CreateNote(Option<FolderID>),
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for NoteListColumnModel {
     type Init = NoteListColumInit;
-    type Input = NoteListColumInput;
+    type Input = NoteListColumnInput;
     type Output = NoteListColumnOutput;
     type Widgets = ComponentWidgets;
 
@@ -80,6 +84,13 @@ impl SimpleComponent for NoteListColumnModel {
                     //     leaflet.navigate(adw::NavigationDirection::Back);
                     // }
                 },
+
+                pack_end = &gtk::Button {
+                    set_icon_name: icons::list_add_symbolic(),
+                    connect_clicked[sender] => move |_| {
+                        sender.input(NoteListColumnInput::CreateNote);
+                    }
+                }
             },
 
             #[local_ref]
@@ -88,7 +99,7 @@ impl SimpleComponent for NoteListColumnModel {
 
                 connect_row_selected[sender] => move |_, row| {
                     if let Some(row) = row {
-                        sender.output(NoteListColumnOutput::SelectNote(format!("{}", row.index() + 1))).unwrap();
+                        sender.input(NoteListColumnInput::SelectNote(row.index() as usize))
                     }
                 }
             }
@@ -104,6 +115,7 @@ impl SimpleComponent for NoteListColumnModel {
         let model = NoteListColumnModel {
             ctx: init.ctx,
             notes,
+            folder_id: None,
         };
 
         let note_list_box = model.notes.widget();
@@ -113,10 +125,22 @@ impl SimpleComponent for NoteListColumnModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, input: Self::Input, _sender: ComponentSender<Self>) {
+    fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>) {
         match input {
-            NoteListColumInput::RefreshNotes(folder_id) => {
+            NoteListColumnInput::RefreshNotes(folder_id) => {
                 self.reload_notes(folder_id);
+            }
+            NoteListColumnInput::SelectNote(index) => {
+                sender
+                    .output(NoteListColumnOutput::SelectNote(
+                        self.notes.get(index).unwrap().abbr_note.id.clone(),
+                    ))
+                    .unwrap();
+            }
+            NoteListColumnInput::CreateNote => {
+                sender
+                    .output(NoteListColumnOutput::CreateNote(self.folder_id.clone()))
+                    .unwrap();
             }
         }
     }
@@ -125,6 +149,7 @@ impl SimpleComponent for NoteListColumnModel {
 impl NoteListColumnModel {
     fn reload_notes(&mut self, folder_id: Option<FolderID>) {
         let mut notes_guard = self.notes.guard();
+        notes_guard.clear();
         for note in self
             .ctx
             .data
@@ -134,5 +159,6 @@ impl NoteListColumnModel {
         {
             notes_guard.push_back(note);
         }
+        self.folder_id = folder_id;
     }
 }

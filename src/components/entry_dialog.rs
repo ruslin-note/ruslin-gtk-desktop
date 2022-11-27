@@ -100,7 +100,7 @@ impl SimpleComponent for EntryDialogModel {
         model
             .entry
             .connect_text_notify(glib::clone!(@strong sender => move |e| {
-                sender.input(EntryDialogInput::ChangeButtonSensitive(e.text().len() > 0));
+                sender.input(EntryDialogInput::ChangeButtonSensitive(!e.text().is_empty()));
             }));
 
         let widgets = view_output!();

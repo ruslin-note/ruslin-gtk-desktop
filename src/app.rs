@@ -94,9 +94,7 @@ impl SimpleComponent for App {
             .detach();
 
         let content_page = ContentPageModel::builder()
-            .launch(ContentPageInit {
-                ctx: init.ctx.clone(),
-            })
+            .launch(ContentPageInit { ctx: init.ctx })
             .detach();
 
         let model = Self {

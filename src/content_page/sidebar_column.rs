@@ -237,6 +237,7 @@ impl SidebarColumnModel {
     fn reload_folders(&mut self) {
         // TODO: async & result
         let mut folders_guard = self.folders.guard();
+        folders_guard.clear();
         for folder in self.ctx.data.db.load_folders().unwrap() {
             folders_guard.push_back(folder);
         }

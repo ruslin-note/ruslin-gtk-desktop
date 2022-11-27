@@ -17,13 +17,14 @@ use sidebar_column::SidebarColumnModel;
 use crate::{
     app::AppContext,
     content_page::{
-        note_list_column::NoteListColumInit,
+        note_editor_column::{NoteEditorColumnInit, NoteEditorColumnInput},
+        note_list_column::{NoteListColumInit, NoteListColumnOutput},
         sidebar_column::{SidebarColumnInit, SidebarColumnOutput},
     },
     properties,
 };
 
-use self::note_list_column::NoteListColumInput;
+use self::note_list_column::NoteListColumnInput;
 
 pub struct ContentPageModel {
     note_list_column: Controller<NoteListColumnModel>,
@@ -76,7 +77,9 @@ impl SimpleComponent for ContentPageModel {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let note_editor_column = note_editor_column::NoteEditorColumnModel::builder()
-            .launch(())
+            .launch(NoteEditorColumnInit {
+                ctx: init.ctx.clone(),
+            })
             .detach();
 
         let note_list_column = note_list_column::NoteListColumnModel::builder()
@@ -85,15 +88,16 @@ impl SimpleComponent for ContentPageModel {
             })
             .forward(note_editor_column.sender(), |msg| match msg {
                 // Is it ok to forward a subcomponent directly to another subcomponent?
-                note_list_column::NoteListColumnOutput::SelectNote(note_id) => {
-                    note_editor_column::NoteEditorColumnInput::OpenNote(note_id)
+                NoteListColumnOutput::SelectNote(note_id) => {
+                    NoteEditorColumnInput::OpenNote(note_id)
+                }
+                NoteListColumnOutput::CreateNote(folder_id) => {
+                    NoteEditorColumnInput::CreateNote(folder_id)
                 }
             });
 
         let sidebar_column = sidebar_column::SidebarColumnModel::builder()
-            .launch(SidebarColumnInit {
-                ctx: init.ctx.clone(),
-            })
+            .launch(SidebarColumnInit { ctx: init.ctx })
             .forward(sender.input_sender(), |msg| match msg {
                 SidebarColumnOutput::OpenFolder(folder_id) => {
                     ContentPageInput::OpenFolder(folder_id)
@@ -150,7 +154,7 @@ impl SimpleComponent for ContentPageModel {
             ContentPageInput::OpenFolder(notes) => {
                 self.note_list_column
                     .sender()
-                    .send(NoteListColumInput::RefreshNotes(notes))
+                    .send(NoteListColumnInput::RefreshNotes(notes))
                     .unwrap();
             }
         }

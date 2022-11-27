@@ -1,14 +1,27 @@
 use adw::prelude::*;
 use relm4::{gtk, prelude::*, ComponentParts, ComponentSender, SimpleComponent};
+use ruslin_data::{FolderID, Note, NoteID};
 use sourceview5::{prelude::*, LanguageManager, StyleSchemeManager};
 
+use crate::AppContext;
+
+#[tracker::track]
 pub struct NoteEditorColumnModel {
-    pub current_note_id: Option<String>,
+    #[tracker::do_not_track]
+    pub ctx: AppContext,
+    pub current_note: Option<Note>,
+}
+
+pub struct NoteEditorColumnInit {
+    pub ctx: AppContext,
 }
 
 #[derive(Debug)]
 pub enum NoteEditorColumnInput {
-    OpenNote(String),
+    OpenNote(NoteID),
+    CreateNote(Option<FolderID>),
+    UpdateTitle(String),
+    UpdateBody(String),
 }
 
 #[derive(Debug)]
@@ -16,7 +29,7 @@ pub enum NoteEditorColumnOutput {}
 
 #[relm4::component(pub)]
 impl SimpleComponent for NoteEditorColumnModel {
-    type Init = ();
+    type Init = NoteEditorColumnInit;
     type Input = NoteEditorColumnInput;
     type Output = NoteEditorColumnOutput;
     type Widgets = NoteEditorColumnWidgets;
@@ -42,46 +55,68 @@ impl SimpleComponent for NoteEditorColumnModel {
                 },
             },
 
-            // gtk::Label {
-            //     set_vexpand: true,
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                #[watch]
+                set_visible: model.current_note.is_some(),
 
-            //     #[watch]
-            //     set_text: &format!("Page {}", model.current_note_id.as_deref().unwrap_or_default()),
-            // }
-            gtk::ScrolledWindow {
-                sourceview5::View {
-                    set_vexpand: true,
-                    set_editable: true,
-                    set_monospace: true,
-                    set_margin_all: 5,
-                    set_wrap_mode: gtk::WrapMode::Word,
-                    set_tab_width: 4,
-                    set_auto_indent: true,
-                    set_insert_spaces_instead_of_tabs: true,
-                    set_highlight_current_line: true,
-                    #[wrap(Some)]
-                    set_buffer: valuebuf = &sourceview5::Buffer {
-                        set_language: LanguageManager::new().language("markdown").as_ref(),
-                        set_style_scheme: StyleSchemeManager::new().scheme("classic").as_ref(),
-                        connect_changed[_sender] => move |x| {
-                            let (start, end) = x.bounds();
-                            log::debug!("valuebuf changed to {:?}", x.text(&start, &end, true));
-                            // let text = x.text(&start, &end, true).to_string();
-                            // sender.input(OptPageMsg::UpdateConf(text))
+                gtk::Entry {
+                    set_valign: gtk::Align::Center,
+                    set_margin_all: 10,
+                    set_hexpand: true,
+                    set_input_hints: gtk::InputHints::NO_SPELLCHECK,
+                    set_buffer: title_buf = &gtk::EntryBuffer {
+                        #[track = "model.changed(NoteEditorColumnModel::current_note())"]
+                        set_text: model.current_note.as_ref().map(|n| n.title.as_ref()).unwrap_or_default(),
+                        connect_text_notify[sender] => move |buf| {
+                            sender.input(NoteEditorColumnInput::UpdateTitle(buf.text()));
                         }
-                    }
+                    },
                 },
-            },
+
+                gtk::ScrolledWindow {
+                    set_vexpand: true,
+
+                    sourceview5::View {
+                        set_vexpand: true,
+                        set_editable: true,
+                        set_monospace: true,
+                        set_margin_bottom: 10,
+                        set_margin_start: 10,
+                        set_margin_end: 10,
+                        set_wrap_mode: gtk::WrapMode::Word,
+                        set_tab_width: 4,
+                        set_auto_indent: true,
+                        set_insert_spaces_instead_of_tabs: true,
+                        set_highlight_current_line: true,
+                        #[wrap(Some)]
+                        set_buffer: body_buf = &sourceview5::Buffer {
+                            set_language: LanguageManager::new().language("markdown").as_ref(),
+                            set_style_scheme: StyleSchemeManager::new().scheme("classic").as_ref(),
+                            #[track = "model.changed(NoteEditorColumnModel::current_note())"]
+                            set_text: model.current_note.as_ref().map(|n| n.body.as_ref()).unwrap_or_default(),
+                            connect_changed[sender] => move |x| {
+                                let (start, end) = x.bounds();
+                                log::debug!("body_buf changed to {:?}", x.text(&start, &end, true));
+                                let text = x.text(&start, &end, true).to_string();
+                                sender.input(NoteEditorColumnInput::UpdateBody(text));
+                            }
+                        }
+                    },
+                },
+            }
         }
     }
 
     fn init(
-        _init: Self::Init,
+        init: Self::Init,
         root: &Self::Root,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let model = NoteEditorColumnModel {
-            current_note_id: None,
+            ctx: init.ctx,
+            current_note: None,
+            tracker: 0,
         };
 
         let widgets = view_output!();
@@ -91,7 +126,39 @@ impl SimpleComponent for NoteEditorColumnModel {
 
     fn update(&mut self, input: Self::Input, _sender: ComponentSender<Self>) {
         match input {
-            NoteEditorColumnInput::OpenNote(note_id) => self.current_note_id = Some(note_id),
+            NoteEditorColumnInput::OpenNote(note_id) => {
+                self.reset();
+                let note = self.ctx.data.db.load_note(&note_id).unwrap();
+                self.set_current_note(Some(note));
+            }
+            NoteEditorColumnInput::CreateNote(folder_id) => {
+                self.reset();
+                self.set_current_note(Some(Note::new(folder_id, String::new(), String::new())));
+            }
+            NoteEditorColumnInput::UpdateTitle(title) => {
+                if self.changed(NoteEditorColumnModel::current_note()) {
+                    self.reset();
+                    return;
+                }
+                if let Some(note) = self.current_note.as_mut() {
+                    if note.title != title {
+                        note.title = title;
+                        self.ctx.data.db.replace_note(note).unwrap();
+                    }
+                }
+            }
+            NoteEditorColumnInput::UpdateBody(body) => {
+                if self.changed(NoteEditorColumnModel::current_note()) {
+                    self.reset();
+                    return;
+                }
+                if let Some(note) = self.current_note.as_mut() {
+                    if note.body != body {
+                        note.body = body;
+                        self.ctx.data.db.replace_note(note).unwrap();
+                    }
+                }
+            }
         }
     }
 }
