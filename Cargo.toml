@@ -12,3 +12,5 @@ tracing-subscriber = "0.3"
 relm4 = { version = "0.5.0-beta.5", features = ["libadwaita", "gnome_43"] }
 adw = { version = "0.2", package = "libadwaita", features = ["v1_2", "gtk_v4_6"] }
 gtk = { version = "0.5", package = "gtk4", features = ["v4_6"] }
+sourceview5 = { version = "0.5", features = ["v5_4"] } # https://wiki.gnome.org/Projects/GtkSourceView
+log = "0.4.17"

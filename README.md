@@ -78,3 +78,6 @@ Join the GNOME and gtk-rs community!
 
 - [Podcasts](https://gitlab.gnome.org/World/podcasts)
 - [Shortwave](https://gitlab.gnome.org/World/Shortwave)
+- [news_flash_gtk](https://gitlab.com/news-flash/news_flash_gtk)
+- [nixos-conf-editor](https://github.com/vlinkz/nixos-conf-editor)
+- [markdown-rs](https://github.com/nilgradisnik/markdown-rs)

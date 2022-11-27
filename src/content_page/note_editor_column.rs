@@ -1,5 +1,6 @@
-use gtk::prelude::*;
-use relm4::{gtk, ComponentParts, ComponentSender, SimpleComponent};
+use adw::prelude::*;
+use relm4::{gtk, prelude::*, ComponentParts, ComponentSender, SimpleComponent};
+use sourceview5::{prelude::*, LanguageManager, StyleSchemeManager};
 
 pub struct NoteEditorColumnModel {
     pub current_note_id: Option<String>,
@@ -41,12 +42,36 @@ impl SimpleComponent for NoteEditorColumnModel {
                 },
             },
 
-            gtk::Label {
-                set_vexpand: true,
+            // gtk::Label {
+            //     set_vexpand: true,
 
-                #[watch]
-                set_text: &format!("Page {}", model.current_note_id.as_deref().unwrap_or_default()),
-            }
+            //     #[watch]
+            //     set_text: &format!("Page {}", model.current_note_id.as_deref().unwrap_or_default()),
+            // }
+            gtk::ScrolledWindow {
+                sourceview5::View {
+                    set_vexpand: true,
+                    set_editable: true,
+                    set_monospace: true,
+                    set_margin_all: 5,
+                    set_wrap_mode: gtk::WrapMode::Word,
+                    set_tab_width: 4,
+                    set_auto_indent: true,
+                    set_insert_spaces_instead_of_tabs: true,
+                    set_highlight_current_line: true,
+                    #[wrap(Some)]
+                    set_buffer: valuebuf = &sourceview5::Buffer {
+                        set_language: LanguageManager::new().language("markdown").as_ref(),
+                        set_style_scheme: StyleSchemeManager::new().scheme("classic").as_ref(),
+                        connect_changed[_sender] => move |x| {
+                            let (start, end) = x.bounds();
+                            log::debug!("valuebuf changed to {:?}", x.text(&start, &end, true));
+                            // let text = x.text(&start, &end, true).to_string();
+                            // sender.input(OptPageMsg::UpdateConf(text))
+                        }
+                    }
+                },
+            },
         }
     }
 

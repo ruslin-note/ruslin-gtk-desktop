@@ -887,7 +887,9 @@ dependencies = [
  "gettext-rs",
  "gtk4",
  "libadwaita",
+ "log",
  "relm4",
+ "sourceview5",
  "tracing",
  "tracing-subscriber",
 ]
@@ -954,6 +956,42 @@ name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
+
+[[package]]
+name = "sourceview5"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "922cc28db6bec169868319262dd932f6403e5ce95dad0d2bb6fcc9ac03be7f10"
+dependencies = [
+ "bitflags",
+ "futures-channel",
+ "futures-core",
+ "gdk-pixbuf",
+ "gdk4",
+ "gio",
+ "glib",
+ "gtk4",
+ "libc",
+ "pango",
+ "sourceview5-sys",
+]
+
+[[package]]
+name = "sourceview5-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73277b2a53923aeecd212a89379dce7e6c687fe35fe6dd41d9b0d7b3d4c2eb0b"
+dependencies = [
+ "gdk-pixbuf-sys",
+ "gdk4-sys",
+ "gio-sys",
+ "glib-sys",
+ "gobject-sys",
+ "gtk4-sys",
+ "libc",
+ "pango-sys",
+ "system-deps",
+]
 
 [[package]]
 name = "spin"
