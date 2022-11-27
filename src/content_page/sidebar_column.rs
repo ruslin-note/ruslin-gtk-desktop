@@ -6,14 +6,15 @@ use relm4::{
     prelude::*,
     ComponentParts, ComponentSender, SimpleComponent,
 };
+use ruslin_data::{Folder, FolderID};
 
 use crate::{
     components::{EntryDialogInit, EntryDialogInput, EntryDialogModel, EntryDialogOutput},
-    icons,
+    icons, AppContext,
 };
 
 struct FolderItemModel {
-    name: String,
+    folder: Folder,
 }
 
 #[derive(Debug)]
@@ -26,7 +27,7 @@ enum FolderItemOutput {}
 
 #[relm4::factory]
 impl FactoryComponent for FolderItemModel {
-    type Init = String;
+    type Init = Folder;
     type Input = FolderItemInput;
     type Output = FolderItemOutput;
     type CommandOutput = ();
@@ -39,21 +40,26 @@ impl FactoryComponent for FolderItemModel {
             #[name(label)]
             gtk::Label {
                 #[watch]
-                set_label: &self.name,
+                set_label: &self.folder.title,
             }
         }
     }
 
     fn init_model(init: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
-        Self { name: init }
+        Self { folder: init }
     }
 }
 
 pub struct SidebarColumnModel {
+    ctx: AppContext,
     note_count: i32,
     folders: FactoryVecDeque<FolderItemModel>,
     folder_notes: Vec<Vec<String>>,
     add_note_dialog: Controller<EntryDialogModel>,
+}
+
+pub struct SidebarColumnInit {
+    pub ctx: AppContext,
 }
 
 #[derive(Debug)]
@@ -66,7 +72,7 @@ pub enum SidebarColumnInput {
 
 #[derive(Debug)]
 pub enum SidebarColumnOutput {
-    OpenFolder(Vec<String>),
+    OpenFolder(Option<FolderID>),
 }
 
 relm4::new_action_group!(pub(super) WindowActionGroup, "win");
@@ -77,7 +83,7 @@ relm4::new_stateless_action!(AddFolderAction, WindowActionGroup, "add-folder");
 
 #[relm4::component(pub)]
 impl SimpleComponent for SidebarColumnModel {
-    type Init = ();
+    type Init = SidebarColumnInit;
     type Input = SidebarColumnInput;
     type Output = SidebarColumnOutput;
     type Widgets = ComponentWidgets;
@@ -156,7 +162,7 @@ impl SimpleComponent for SidebarColumnModel {
     }
 
     fn init(
-        _init: Self::Init,
+        init: Self::Init,
         root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
@@ -170,12 +176,14 @@ impl SimpleComponent for SidebarColumnModel {
             .forward(sender.input_sender(), |msg| match msg {
                 EntryDialogOutput::Text(s) => SidebarColumnInput::InsertFolder(s),
             });
-        let model = SidebarColumnModel {
+        let mut model = SidebarColumnModel {
+            ctx: init.ctx,
             note_count: 0,
             folders,
             folder_notes: Vec::new(),
             add_note_dialog,
         };
+        model.reload_folders();
 
         let folder_list_box = model.folders.widget();
         let widgets = view_output!();
@@ -202,27 +210,35 @@ impl SimpleComponent for SidebarColumnModel {
                     format!("[{}] Note 2", name),
                     format!("[{}] Note 3", name),
                 ]);
-                self.folders.guard().push_back(name);
+                let folder = ruslin_data::Folder::new(name, None);
+                self.ctx.data.db.replace_folder(&folder).unwrap();
+                self.folders.guard().push_back(folder);
             }
             SidebarColumnInput::SelectAllFolders => {
-                let mut folder_notes: Vec<String> = Vec::new();
-                for notes in &self.folder_notes {
-                    folder_notes.extend_from_slice(notes);
-                }
                 sender
-                    .output(SidebarColumnOutput::OpenFolder(folder_notes))
+                    .output(SidebarColumnOutput::OpenFolder(None))
                     .unwrap();
             }
             SidebarColumnInput::SelectFolderIndex(index) => {
                 sender
-                    .output(SidebarColumnOutput::OpenFolder(
-                        self.folder_notes[index as usize].clone(),
-                    ))
+                    .output(SidebarColumnOutput::OpenFolder(Some(
+                        self.folders.get(index as usize).unwrap().folder.id.clone(),
+                    )))
                     .unwrap();
             }
             SidebarColumnInput::ShowAddNoteDialog => {
                 self.add_note_dialog.emit(EntryDialogInput::Show);
             }
+        }
+    }
+}
+
+impl SidebarColumnModel {
+    fn reload_folders(&mut self) {
+        // TODO: async & result
+        let mut folders_guard = self.folders.guard();
+        for folder in self.ctx.data.db.load_folders().unwrap() {
+            folders_guard.push_back(folder);
         }
     }
 }

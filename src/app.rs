@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use adw::prelude::*;
 use gtk::prelude::{ApplicationExt, ApplicationWindowExt, GtkWindowExt, SettingsExt, WidgetExt};
 use gtk::{gio, glib};
@@ -8,8 +10,9 @@ use relm4::{
 };
 
 use crate::config::{APP_ID, PROFILE};
-use crate::content_page::ContentPageModel;
+use crate::content_page::{ContentPageInit, ContentPageModel};
 use crate::modals::about::AboutDialog;
+use ruslin_data::RuslinData;
 
 pub(super) struct App {
     about_dialog: Controller<AboutDialog>,
@@ -26,9 +29,19 @@ relm4::new_stateless_action!(PreferencesAction, WindowActionGroup, "preferences"
 relm4::new_stateless_action!(pub(super) ShortcutsAction, WindowActionGroup, "show-help-overlay");
 relm4::new_stateless_action!(AboutAction, WindowActionGroup, "about");
 
+#[derive(Debug, Clone)]
+pub struct AppContext {
+    pub data: Arc<RuslinData>,
+}
+
+#[derive(Debug)]
+pub struct AppInit {
+    pub ctx: AppContext,
+}
+
 #[relm4::component(pub)]
 impl SimpleComponent for App {
-    type Init = ();
+    type Init = AppInit;
     type Input = AppMsg;
     type Output = ();
     type Widgets = AppWidgets;
@@ -71,7 +84,7 @@ impl SimpleComponent for App {
     }
 
     fn init(
-        _init: Self::Init,
+        init: Self::Init,
         root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
@@ -80,7 +93,11 @@ impl SimpleComponent for App {
             .launch(())
             .detach();
 
-        let content_page = ContentPageModel::builder().launch(()).detach();
+        let content_page = ContentPageModel::builder()
+            .launch(ContentPageInit {
+                ctx: init.ctx.clone(),
+            })
+            .detach();
 
         let model = Self {
             about_dialog,

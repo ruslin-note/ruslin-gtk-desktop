@@ -11,9 +11,17 @@ use relm4::{
 
 use note_editor_column::NoteEditorColumnModel;
 use note_list_column::NoteListColumnModel;
+use ruslin_data::FolderID;
 use sidebar_column::SidebarColumnModel;
 
-use crate::{content_page::sidebar_column::SidebarColumnOutput, properties};
+use crate::{
+    app::AppContext,
+    content_page::{
+        note_list_column::NoteListColumInit,
+        sidebar_column::{SidebarColumnInit, SidebarColumnOutput},
+    },
+    properties,
+};
 
 use self::note_list_column::NoteListColumInput;
 
@@ -23,14 +31,18 @@ pub struct ContentPageModel {
     sidebar_column: Controller<SidebarColumnModel>,
 }
 
+pub struct ContentPageInit {
+    pub ctx: AppContext,
+}
+
 #[derive(Debug)]
 pub enum ContentPageInput {
-    OpenFolder(Vec<String>),
+    OpenFolder(Option<FolderID>),
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for ContentPageModel {
-    type Init = ();
+    type Init = ContentPageInit;
     type Input = ContentPageInput;
     type Output = ();
     type Widgets = ComponentWidgets;
@@ -59,7 +71,7 @@ impl SimpleComponent for ContentPageModel {
     }
 
     fn init(
-        _init: Self::Init,
+        init: Self::Init,
         root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
@@ -68,7 +80,9 @@ impl SimpleComponent for ContentPageModel {
             .detach();
 
         let note_list_column = note_list_column::NoteListColumnModel::builder()
-            .launch(())
+            .launch(NoteListColumInit {
+                ctx: init.ctx.clone(),
+            })
             .forward(note_editor_column.sender(), |msg| match msg {
                 // Is it ok to forward a subcomponent directly to another subcomponent?
                 note_list_column::NoteListColumnOutput::SelectNote(note_id) => {
@@ -77,9 +91,13 @@ impl SimpleComponent for ContentPageModel {
             });
 
         let sidebar_column = sidebar_column::SidebarColumnModel::builder()
-            .launch(())
+            .launch(SidebarColumnInit {
+                ctx: init.ctx.clone(),
+            })
             .forward(sender.input_sender(), |msg| match msg {
-                SidebarColumnOutput::OpenFolder(notes) => ContentPageInput::OpenFolder(notes),
+                SidebarColumnOutput::OpenFolder(folder_id) => {
+                    ContentPageInput::OpenFolder(folder_id)
+                }
             });
 
         let model = ContentPageModel {

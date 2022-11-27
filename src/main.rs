@@ -8,6 +8,8 @@ mod modals;
 mod properties;
 mod setup;
 
+use std::{path::Path, sync::Arc};
+
 use gtk::prelude::ApplicationExt;
 use relm4::{
     actions::{AccelsPlus, RelmAction, RelmActionGroup},
@@ -15,9 +17,11 @@ use relm4::{
 };
 
 use app::App;
+pub use app::AppContext;
+use ruslin_data::RuslinData;
 use setup::setup;
 
-use crate::config::APP_ID;
+use crate::{app::AppInit, config::APP_ID};
 
 relm4::new_action_group!(AppActionGroup, "app");
 relm4::new_stateless_action!(QuitAction, AppActionGroup, "quit");
@@ -57,5 +61,12 @@ fn main() {
 
     let app = RelmApp::with_app(app);
 
-    app.run::<App>(());
+    let data_dir = dirs::data_dir().unwrap();
+    log::info!("data dir: {}", data_dir.display());
+
+    let app_context = AppContext {
+        data: Arc::new(RuslinData::new(&data_dir).unwrap()),
+    };
+
+    app.run::<App>(AppInit { ctx: app_context });
 }

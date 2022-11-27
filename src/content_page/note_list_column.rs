@@ -2,11 +2,12 @@ use adw::prelude::*;
 use relm4::{
     factory::FactoryVecDeque, gtk, prelude::*, ComponentParts, ComponentSender, SimpleComponent,
 };
+use ruslin_data::{AbbrNote, FolderID};
 
-use crate::icons;
+use crate::{icons, AppContext};
 
 struct NoteItemModel {
-    title: String,
+    abbr_note: AbbrNote,
 }
 
 #[derive(Debug)]
@@ -17,7 +18,7 @@ enum NoteItemOutput {}
 
 #[relm4::factory]
 impl FactoryComponent for NoteItemModel {
-    type Init = String;
+    type Init = AbbrNote;
     type Input = NoteItemInput;
     type Output = NoteItemOutput;
     type CommandOutput = ();
@@ -28,22 +29,27 @@ impl FactoryComponent for NoteItemModel {
     view! {
         root = gtk::Label {
             #[watch]
-            set_label: &self.title,
+            set_label: &self.abbr_note.title,
         }
     }
 
     fn init_model(init: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
-        Self { title: init }
+        Self { abbr_note: init }
     }
 }
 
 pub struct NoteListColumnModel {
+    ctx: AppContext,
     notes: FactoryVecDeque<NoteItemModel>,
+}
+
+pub struct NoteListColumInit {
+    pub ctx: AppContext,
 }
 
 #[derive(Debug)]
 pub enum NoteListColumInput {
-    RefreshNotes(Vec<String>),
+    RefreshNotes(Option<FolderID>),
 }
 
 #[derive(Debug)]
@@ -53,7 +59,7 @@ pub enum NoteListColumnOutput {
 
 #[relm4::component(pub)]
 impl SimpleComponent for NoteListColumnModel {
-    type Init = ();
+    type Init = NoteListColumInit;
     type Input = NoteListColumInput;
     type Output = NoteListColumnOutput;
     type Widgets = ComponentWidgets;
@@ -90,12 +96,15 @@ impl SimpleComponent for NoteListColumnModel {
     }
 
     fn init(
-        _init: Self::Init,
+        init: Self::Init,
         root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let notes = FactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
-        let model = NoteListColumnModel { notes };
+        let model = NoteListColumnModel {
+            ctx: init.ctx,
+            notes,
+        };
 
         let note_list_box = model.notes.widget();
 
@@ -106,13 +115,24 @@ impl SimpleComponent for NoteListColumnModel {
 
     fn update(&mut self, input: Self::Input, _sender: ComponentSender<Self>) {
         match input {
-            NoteListColumInput::RefreshNotes(notes) => {
-                let mut notes_guard = self.notes.guard();
-                notes_guard.clear();
-                for note in notes {
-                    notes_guard.push_back(note);
-                }
+            NoteListColumInput::RefreshNotes(folder_id) => {
+                self.reload_notes(folder_id);
             }
+        }
+    }
+}
+
+impl NoteListColumnModel {
+    fn reload_notes(&mut self, folder_id: Option<FolderID>) {
+        let mut notes_guard = self.notes.guard();
+        for note in self
+            .ctx
+            .data
+            .db
+            .load_abbr_notes(folder_id.as_ref())
+            .unwrap()
+        {
+            notes_guard.push_back(note);
         }
     }
 }
