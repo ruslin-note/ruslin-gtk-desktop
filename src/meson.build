@@ -20,6 +20,7 @@ run_command(
 
 cargo_options = [ '--manifest-path', meson.project_source_root() / 'Cargo.toml' ]
 cargo_options += [ '--target-dir', meson.project_build_root() / 'src' ]
+# cargo_options += [ '--config', meson.project_source_root() / '.cargo/config.toml' ]
 
 if get_option('profile') == 'default'
   cargo_options += [ '--release' ]
@@ -31,6 +32,7 @@ else
 endif
 
 cargo_env = [ 'CARGO_HOME=' + meson.project_build_root() / 'cargo-home' ]
+cargo_env += [ 'RUSTFLAGS=--cfg uuid_unstable' ]
 
 cargo_build = custom_target(
   'cargo-build',
