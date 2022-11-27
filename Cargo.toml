@@ -1,5 +1,5 @@
 [package]
-name = "ruslin"
+name = "ruslin-gtk-desktop"
 version = "0.1.0"
 authors = ["DianQK <dianqk@dianqk.net>"]
 edition = "2021"
