@@ -118,6 +118,7 @@ impl SimpleComponent for EntryDialogModel {
                     .output(EntryDialogOutput::Text(self.entry.text()))
                     .unwrap();
                 self.visible = false;
+                self.entry.set_text("");
             }
         }
     }
