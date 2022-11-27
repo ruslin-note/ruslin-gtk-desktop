@@ -81,6 +81,7 @@ impl SimpleComponent for ContentPageModel {
             .forward(sender.input_sender(), |msg| match msg {
                 SidebarColumnOutput::OpenFolder(notes) => ContentPageInput::OpenFolder(notes),
             });
+
         let model = ContentPageModel {
             note_editor_column,
             note_list_column,

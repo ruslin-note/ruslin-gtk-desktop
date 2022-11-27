@@ -7,7 +7,10 @@ use relm4::{
     ComponentParts, ComponentSender, SimpleComponent,
 };
 
-use crate::icons;
+use crate::{
+    components::{EntryDialogInit, EntryDialogInput, EntryDialogModel, EntryDialogOutput},
+    icons,
+};
 
 struct FolderItemModel {
     name: String,
@@ -50,13 +53,15 @@ pub struct SidebarColumnModel {
     note_count: i32,
     folders: FactoryVecDeque<FolderItemModel>,
     folder_notes: Vec<Vec<String>>,
+    add_note_dialog: Controller<EntryDialogModel>,
 }
 
 #[derive(Debug)]
 pub enum SidebarColumnInput {
-    InsertFolder,
+    InsertFolder(String),
     SelectFolderIndex(u32),
     SelectAllFolders,
+    ShowAddNoteDialog,
 }
 
 #[derive(Debug)]
@@ -156,10 +161,20 @@ impl SimpleComponent for SidebarColumnModel {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let folders = FactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
+        let add_note_dialog = EntryDialogModel::builder()
+            .transient_for(root)
+            .launch(EntryDialogInit {
+                title: "Add Note".to_string(),
+                button_label: "Add".to_string(),
+            })
+            .forward(sender.input_sender(), |msg| match msg {
+                EntryDialogOutput::Text(s) => SidebarColumnInput::InsertFolder(s),
+            });
         let model = SidebarColumnModel {
             note_count: 0,
             folders,
             folder_notes: Vec::new(),
+            add_note_dialog,
         };
 
         let folder_list_box = model.folders.widget();
@@ -167,7 +182,7 @@ impl SimpleComponent for SidebarColumnModel {
 
         let add_group = RelmActionGroup::<WindowActionGroup>::new();
         let add_folder_action: RelmAction<AddFolderAction> = RelmAction::new_stateless(move |_| {
-            sender.input(SidebarColumnInput::InsertFolder);
+            sender.input(SidebarColumnInput::ShowAddNoteDialog);
         });
         add_group.add_action(&add_folder_action);
         let add_actions = add_group.into_action_group();
@@ -180,14 +195,14 @@ impl SimpleComponent for SidebarColumnModel {
 
     fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>) {
         match input {
-            SidebarColumnInput::InsertFolder => {
+            SidebarColumnInput::InsertFolder(name) => {
                 self.note_count += 1;
                 self.folder_notes.push(vec![
-                    format!("[{}] Note 1", self.note_count),
-                    format!("[{}] Note 2", self.note_count),
-                    format!("[{}] Note 3", self.note_count),
+                    format!("[{}] Note 1", name),
+                    format!("[{}] Note 2", name),
+                    format!("[{}] Note 3", name),
                 ]);
-                self.folders.guard().push_back(self.note_count.to_string());
+                self.folders.guard().push_back(name);
             }
             SidebarColumnInput::SelectAllFolders => {
                 let mut folder_notes: Vec<String> = Vec::new();
@@ -204,6 +219,9 @@ impl SimpleComponent for SidebarColumnModel {
                         self.folder_notes[index as usize].clone(),
                     ))
                     .unwrap();
+            }
+            SidebarColumnInput::ShowAddNoteDialog => {
+                self.add_note_dialog.emit(EntryDialogInput::Show);
             }
         }
     }
