@@ -61,16 +61,18 @@ impl SimpleComponent for NoteEditorColumnModel {
                 #[watch]
                 set_visible: model.current_note.is_some(),
 
-                gtk::Entry {
-                    set_valign: gtk::Align::Center,
-                    set_margin_all: 10,
+                gtk::TextView {
+                    set_height_request: 30,
+                    set_margin_all: 15,
                     set_hexpand: true,
                     set_input_hints: gtk::InputHints::NO_SPELLCHECK,
-                    set_buffer: title_buf = &gtk::EntryBuffer {
+                    #[wrap(Some)]
+                    set_buffer: title_buf = &gtk::TextBuffer {
                         #[track = "model.changed(NoteEditorColumnModel::current_note())"]
                         set_text: model.current_note.as_ref().map(|n| n.title.as_ref()).unwrap_or_default(),
                         connect_text_notify[sender] => move |buf| {
-                            sender.input(NoteEditorColumnInput::UpdateTitle(buf.text()));
+                            let (start, end) = buf.bounds();
+                            sender.input(NoteEditorColumnInput::UpdateTitle(buf.text(&start, &end, true).to_string()));
                         }
                     },
                     add_css_class: "title-1",
@@ -81,6 +83,7 @@ impl SimpleComponent for NoteEditorColumnModel {
                 },
 
                 gtk::ScrolledWindow {
+                    set_vexpand: true,
 
                     gtk::Box {
                         set_margin_top: 10,
