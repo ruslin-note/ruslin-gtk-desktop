@@ -1,4 +1,8 @@
-.title-header{
+.title-header {
   font-size: 36px;
   font-weight: bold;
+}
+
+.content-view {
+  background-color: @view_bg_color;
 }
