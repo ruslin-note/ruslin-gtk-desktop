@@ -58,6 +58,11 @@ impl SimpleComponent for ContentPageModel {
             set_flap: Some(model.sidebar_column.widget()),
 
             #[wrap(Some)]
+            set_separator = &gtk::Separator {
+
+            },
+
+            #[wrap(Some)]
             set_content = &gtk::Box {
                 #[name = "leaflet"]
                 adw::Leaflet {
@@ -65,6 +70,13 @@ impl SimpleComponent for ContentPageModel {
                     set_fold_threshold_policy: adw::FoldThresholdPolicy::Minimum,
 
                     append: model.note_list_column.widget(),
+
+                    append = &gtk::Separator::new(gtk::Orientation::Horizontal) {
+
+                    } -> {
+                        set_navigatable: false,
+                    },
+
                     append: model.note_editor_column.widget(),
                 }
             },
