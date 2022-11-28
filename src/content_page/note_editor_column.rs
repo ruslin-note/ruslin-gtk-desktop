@@ -80,7 +80,7 @@ impl SimpleComponent for NoteEditorColumnModel {
                     sourceview5::View {
                         set_vexpand: true,
                         set_editable: true,
-                        set_monospace: true,
+                        // set_monospace: true,
                         set_margin_bottom: 10,
                         set_margin_start: 10,
                         set_margin_end: 10,
@@ -92,6 +92,7 @@ impl SimpleComponent for NoteEditorColumnModel {
                         #[wrap(Some)]
                         set_buffer: body_buf = &sourceview5::Buffer {
                             set_language: LanguageManager::new().language("markdown").as_ref(),
+                            // ["Adwaita", "Adwaita-dark", "classic", "classic-dark", "cobalt", "cobalt-light", "kate", "kate-dark", "oblivion", "solarized-dark", "solarized-light", "tango"]
                             set_style_scheme: StyleSchemeManager::new().scheme("classic").as_ref(),
                             #[track = "model.changed(NoteEditorColumnModel::current_note())"]
                             set_text: model.current_note.as_ref().map(|n| n.body.as_ref()).unwrap_or_default(),

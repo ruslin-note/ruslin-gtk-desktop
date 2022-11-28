@@ -41,6 +41,7 @@ impl FactoryComponent for FolderItemModel {
             gtk::Label {
                 #[watch]
                 set_label: &self.folder.title,
+                add_css_class: "heading",
             }
         }
     }
@@ -134,7 +135,8 @@ impl SimpleComponent for SidebarColumnModel {
 
                 gtk::Box {
                     gtk::Label {
-                        set_label: "All Folders",
+                        set_label: "All Notes",
+                        add_css_class: "heading",
                     },
                 },
 

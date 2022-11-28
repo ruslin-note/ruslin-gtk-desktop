@@ -27,9 +27,27 @@ impl FactoryComponent for NoteItemModel {
     type ParentWidget = gtk::ListBox;
 
     view! {
-        root = gtk::Label {
-            #[watch]
-            set_label: &self.abbr_note.title,
+        root = gtk::Box {
+            set_orientation: gtk::Orientation::Vertical,
+            set_spacing: 5,
+            gtk::Box {
+                set_margin_top: 5,
+
+                gtk::Label {
+                    #[watch]
+                    set_label: &self.abbr_note.title,
+                    add_css_class: "heading",
+                },
+            },
+            gtk::Box {
+                set_margin_bottom: 7,
+
+                gtk::Label {
+                    #[watch]
+                    set_label: &self.abbr_note.updated_time.format_ymd_hms(),
+                    add_css_class: "caption",
+                },
+            }
         }
     }
 
@@ -71,6 +89,7 @@ impl SimpleComponent for NoteListColumnModel {
     view! {
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
+            set_width_request: 220,
 
             #[name = "sidebar_header"]
             adw::HeaderBar {
@@ -96,6 +115,7 @@ impl SimpleComponent for NoteListColumnModel {
             #[local_ref]
             note_list_box -> gtk::ListBox {
                 set_selection_mode: gtk::SelectionMode::Single,
+                add_css_class: "navigation-sidebar",
 
                 connect_row_selected[sender] => move |_, row| {
                     if let Some(row) = row {
