@@ -1,10 +1,12 @@
+use std::convert::identity;
+
 use adw::prelude::*;
 use relm4::{
     actions::{RelmAction, RelmActionGroup},
     factory::FactoryVecDeque,
     gtk,
     prelude::*,
-    ComponentParts, ComponentSender, SimpleComponent,
+    ComponentParts, ComponentSender, SimpleComponent, Worker, WorkerController,
 };
 use ruslin_data::{Folder, FolderID};
 
@@ -51,12 +53,56 @@ impl FactoryComponent for FolderItemModel {
     }
 }
 
-pub struct SidebarColumnModel {
+struct FoldersHandler {
     ctx: AppContext,
-    note_count: i32,
+}
+
+impl FoldersHandler {
+    fn load_folders(&self) -> Vec<Folder> {
+        self.ctx.data.db.load_folders().unwrap()
+    }
+}
+
+#[derive(Debug)]
+enum FoldersHandlerInput {
+    InsertFolder { title: String },
+    ReloadFolers,
+}
+
+impl Worker for FoldersHandler {
+    type Init = AppContext;
+    type Input = FoldersHandlerInput;
+    type Output = SidebarColumnInput;
+
+    fn init(init: Self::Init, sender: ComponentSender<Self>) -> Self {
+        sender.input(FoldersHandlerInput::ReloadFolers);
+        Self { ctx: init }
+    }
+
+    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
+        match message {
+            FoldersHandlerInput::InsertFolder { title } => {
+                let folder = Folder::new(title, None);
+                self.ctx.data.db.replace_folder(&folder).unwrap();
+                let folders = self.load_folders();
+                sender
+                    .output(SidebarColumnInput::ReloadFolers(folders))
+                    .unwrap();
+            }
+            FoldersHandlerInput::ReloadFolers => {
+                let folders = self.load_folders();
+                sender
+                    .output(SidebarColumnInput::ReloadFolers(folders))
+                    .unwrap();
+            }
+        }
+    }
+}
+
+pub struct SidebarColumnModel {
     folders: FactoryVecDeque<FolderItemModel>,
-    folder_notes: Vec<Vec<String>>,
     add_note_dialog: Controller<EntryDialogModel>,
+    _worker: WorkerController<FoldersHandler>,
 }
 
 pub struct SidebarColumnInit {
@@ -65,10 +111,10 @@ pub struct SidebarColumnInit {
 
 #[derive(Debug)]
 pub enum SidebarColumnInput {
-    InsertFolder(String),
     SelectFolderIndex(u32),
     SelectAllFolders,
     ShowAddNoteDialog,
+    ReloadFolers(Vec<Folder>),
 }
 
 #[derive(Debug)]
@@ -168,6 +214,9 @@ impl SimpleComponent for SidebarColumnModel {
         root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let worker = FoldersHandler::builder()
+            .detach_worker(init.ctx)
+            .forward(sender.input_sender(), identity);
         let folders = FactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
         let add_note_dialog = EntryDialogModel::builder()
             .transient_for(root)
@@ -175,17 +224,14 @@ impl SimpleComponent for SidebarColumnModel {
                 title: "Add Note".to_string(),
                 button_label: "Add".to_string(),
             })
-            .forward(sender.input_sender(), |msg| match msg {
-                EntryDialogOutput::Text(s) => SidebarColumnInput::InsertFolder(s),
+            .forward(worker.sender(), |msg| match msg {
+                EntryDialogOutput::Text(title) => FoldersHandlerInput::InsertFolder { title },
             });
-        let mut model = SidebarColumnModel {
-            ctx: init.ctx,
-            note_count: 0,
+        let model = SidebarColumnModel {
             folders,
-            folder_notes: Vec::new(),
             add_note_dialog,
+            _worker: worker,
         };
-        model.reload_folders();
 
         let folder_list_box = model.folders.widget();
         let widgets = view_output!();
@@ -205,16 +251,12 @@ impl SimpleComponent for SidebarColumnModel {
 
     fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>) {
         match input {
-            SidebarColumnInput::InsertFolder(name) => {
-                self.note_count += 1;
-                self.folder_notes.push(vec![
-                    format!("[{}] Note 1", name),
-                    format!("[{}] Note 2", name),
-                    format!("[{}] Note 3", name),
-                ]);
-                let folder = ruslin_data::Folder::new(name, None);
-                self.ctx.data.db.replace_folder(&folder).unwrap();
-                self.folders.guard().push_back(folder);
+            SidebarColumnInput::ReloadFolers(folders) => {
+                let mut folders_guard = self.folders.guard();
+                folders_guard.clear();
+                for folder in folders.into_iter() {
+                    folders_guard.push_back(folder);
+                }
             }
             SidebarColumnInput::SelectAllFolders => {
                 sender
@@ -235,13 +277,13 @@ impl SimpleComponent for SidebarColumnModel {
     }
 }
 
-impl SidebarColumnModel {
-    fn reload_folders(&mut self) {
-        // TODO: async & result
-        let mut folders_guard = self.folders.guard();
-        folders_guard.clear();
-        for folder in self.ctx.data.db.load_folders().unwrap() {
-            folders_guard.push_back(folder);
-        }
-    }
-}
+// impl SidebarColumnModel {
+//     fn reload_folders(&mut self) {
+//         // TODO: async & result
+// let mut folders_guard = self.folders.guard();
+// folders_guard.clear();
+// for folder in self.ctx.data.db.load_folders().unwrap() {
+//     folders_guard.push_back(folder);
+// }
+//     }
+// }
