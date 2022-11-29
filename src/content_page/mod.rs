@@ -49,6 +49,7 @@ impl SimpleComponent for ContentPageModel {
     type Widgets = ComponentWidgets;
 
     view! {
+        #[name = "flap"]
         adw::Flap {
             set_flap_position: gtk::PackType::Start,
             set_fold_threshold_policy: adw::FoldThresholdPolicy::Natural,
@@ -125,6 +126,7 @@ impl SimpleComponent for ContentPageModel {
         let widgets = view_output!();
 
         let leaflet: &adw::Leaflet = &widgets.leaflet;
+        let flap: &adw::Flap = &widgets.flap;
 
         leaflet
             .bind_property(
@@ -156,6 +158,23 @@ impl SimpleComponent for ContentPageModel {
             .back_button
             .connect_clicked(glib::clone!(@strong leaflet => move |_| { // use output?
                 leaflet.navigate(adw::NavigationDirection::Back);
+            }));
+        flap.bind_property(
+            properties::folded(),
+            &model.note_list_column.widgets().change_siderbar_button,
+            "active",
+        )
+        .flags(glib::BindingFlags::SYNC_CREATE | glib::BindingFlags::INVERT_BOOLEAN)
+        .build();
+        model
+            .note_list_column
+            .widgets()
+            .change_siderbar_button
+            .connect_clicked(glib::clone!(@strong flap => move |_| { // use output?
+                match flap.is_folded() {
+                    true => flap.set_fold_policy(adw::FlapFoldPolicy::Never),
+                    false => flap.set_fold_policy(adw::FlapFoldPolicy::Always),
+                }
             }));
 
         ComponentParts { model, widgets }

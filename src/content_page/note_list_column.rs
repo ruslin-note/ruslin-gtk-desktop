@@ -97,11 +97,9 @@ impl SimpleComponent for NoteListColumnModel {
                 set_title_widget = &adw::WindowTitle {
                 },
 
-                pack_start = &gtk::Button {
+                #[name = "change_siderbar_button"]
+                pack_start = &gtk::ToggleButton {
                     set_icon_name: icons::view_sidebar_start_symbolic(),
-                    // connect_clicked[leaflet] => move |_| {
-                    //     leaflet.navigate(adw::NavigationDirection::Back);
-                    // }
                 },
 
                 pack_end = &gtk::Button {
