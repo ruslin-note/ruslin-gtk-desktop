@@ -85,38 +85,34 @@ impl SimpleComponent for NoteEditorColumnModel {
                 gtk::ScrolledWindow {
                     set_vexpand: true,
 
-                    gtk::Box {
+                    sourceview5::View {
+                        set_vexpand: true,
+                        set_editable: true,
+                        set_monospace: true,
                         set_margin_top: 10,
                         set_margin_bottom: 10,
-                        set_orientation: gtk::Orientation::Vertical,
-
-                        sourceview5::View {
-                            set_vexpand: true,
-                            set_editable: true,
-                            set_monospace: true,
-                            set_margin_start: 15,
-                            set_margin_end: 15,
-                            set_wrap_mode: gtk::WrapMode::Word,
-                            set_tab_width: 4,
-                            set_auto_indent: true,
-                            set_insert_spaces_instead_of_tabs: true,
-                            // set_highlight_current_line: true,
-                            #[wrap(Some)]
-                            set_buffer: body_buf = &sourceview5::Buffer {
-                                set_language: LanguageManager::new().language("markdown").as_ref(),
-                                // ["Adwaita", "Adwaita-dark", "classic", "classic-dark", "cobalt", "cobalt-light", "kate", "kate-dark", "oblivion", "solarized-dark", "solarized-light", "tango"]
-                                set_style_scheme: StyleSchemeManager::new().scheme("classic").as_ref(),
-                                #[track = "model.changed(NoteEditorColumnModel::current_note())"]
-                                set_text: model.current_note.as_ref().map(|n| n.body.as_ref()).unwrap_or_default(),
-                                connect_changed[sender] => move |x| {
-                                    let (start, end) = x.bounds();
-                                    log::debug!("body_buf changed to {:?}", x.text(&start, &end, true));
-                                    let text = x.text(&start, &end, true).to_string();
-                                    sender.input(NoteEditorColumnInput::UpdateBody(text));
-                                }
+                        set_margin_start: 15,
+                        set_margin_end: 15,
+                        set_wrap_mode: gtk::WrapMode::Word,
+                        set_tab_width: 4,
+                        set_auto_indent: true,
+                        set_insert_spaces_instead_of_tabs: true,
+                        // set_highlight_current_line: true,
+                        #[wrap(Some)]
+                        set_buffer: body_buf = &sourceview5::Buffer {
+                            set_language: LanguageManager::new().language("markdown").as_ref(),
+                            // ["Adwaita", "Adwaita-dark", "classic", "classic-dark", "cobalt", "cobalt-light", "kate", "kate-dark", "oblivion", "solarized-dark", "solarized-light", "tango"]
+                            set_style_scheme: StyleSchemeManager::new().scheme("classic").as_ref(),
+                            #[track = "model.changed(NoteEditorColumnModel::current_note())"]
+                            set_text: model.current_note.as_ref().map(|n| n.body.as_ref()).unwrap_or_default(),
+                            connect_changed[sender] => move |x| {
+                                let (start, end) = x.bounds();
+                                log::debug!("body_buf changed to {:?}", x.text(&start, &end, true));
+                                let text = x.text(&start, &end, true).to_string();
+                                sender.input(NoteEditorColumnInput::UpdateBody(text));
                             }
-                        },
-                    }
+                        }
+                    },
                 },
             }
         }
