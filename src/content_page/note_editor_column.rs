@@ -1,6 +1,6 @@
 use adw::prelude::*;
 use relm4::{gtk, prelude::*, ComponentParts, ComponentSender, SimpleComponent};
-use ruslin_data::{FolderID, Note, NoteID};
+use ruslin_data::{Note, UpdateSource};
 use sourceview5::{prelude::*, LanguageManager, StyleSchemeManager};
 
 use crate::AppContext;
@@ -18,8 +18,8 @@ pub struct NoteEditorColumnInit {
 
 #[derive(Debug)]
 pub enum NoteEditorColumnInput {
-    OpenNote(NoteID),
-    CreateNote(Option<FolderID>),
+    OpenNote { id: String },
+    CreateNote { folder_id: Option<String> },
     UpdateTitle(String),
     UpdateBody(String),
 }
@@ -69,8 +69,8 @@ impl SimpleComponent for NoteEditorColumnModel {
                     #[wrap(Some)]
                     set_buffer: title_buf = &gtk::TextBuffer {
                         #[track = "model.changed(NoteEditorColumnModel::current_note())"]
-                        set_text: model.current_note.as_ref().map(|n| n.title.as_ref()).unwrap_or_default(),
-                        connect_text_notify[sender] => move |buf| {
+                        set_text: model.current_note.as_ref().map(|n| n.get_title()).unwrap_or_default(),
+                        connect_end_user_action[sender] => move |buf| {
                             let (start, end) = buf.bounds();
                             sender.input(NoteEditorColumnInput::UpdateTitle(buf.text(&start, &end, true).to_string()));
                         }
@@ -105,9 +105,8 @@ impl SimpleComponent for NoteEditorColumnModel {
                             set_style_scheme: StyleSchemeManager::new().scheme("classic").as_ref(),
                             #[track = "model.changed(NoteEditorColumnModel::current_note())"]
                             set_text: model.current_note.as_ref().map(|n| n.body.as_ref()).unwrap_or_default(),
-                            connect_changed[sender] => move |x| {
+                            connect_end_user_action[sender] => move |x| {
                                 let (start, end) = x.bounds();
-                                log::debug!("body_buf changed to {:?}", x.text(&start, &end, true));
                                 let text = x.text(&start, &end, true).to_string();
                                 sender.input(NoteEditorColumnInput::UpdateBody(text));
                             }
@@ -136,12 +135,12 @@ impl SimpleComponent for NoteEditorColumnModel {
 
     fn update(&mut self, input: Self::Input, _sender: ComponentSender<Self>) {
         match input {
-            NoteEditorColumnInput::OpenNote(note_id) => {
+            NoteEditorColumnInput::OpenNote { id } => {
                 self.reset();
-                let note = self.ctx.data.db.load_note(&note_id).unwrap();
+                let note = self.ctx.data.db.load_note(&id).unwrap();
                 self.set_current_note(Some(note));
             }
-            NoteEditorColumnInput::CreateNote(folder_id) => {
+            NoteEditorColumnInput::CreateNote { folder_id } => {
                 self.reset();
                 self.set_current_note(Some(Note::new(folder_id, String::new(), String::new())));
             }
@@ -151,9 +150,13 @@ impl SimpleComponent for NoteEditorColumnModel {
                     return;
                 }
                 if let Some(note) = self.current_note.as_mut() {
-                    if note.title != title {
-                        note.title = title;
-                        self.ctx.data.db.replace_note(note).unwrap();
+                    if note.get_title() != title {
+                        note.set_title(&title);
+                        self.ctx
+                            .data
+                            .db
+                            .replace_note(note, UpdateSource::LocalEdit)
+                            .unwrap();
                     }
                 }
             }
@@ -165,7 +168,11 @@ impl SimpleComponent for NoteEditorColumnModel {
                 if let Some(note) = self.current_note.as_mut() {
                     if note.body != body {
                         note.body = body;
-                        self.ctx.data.db.replace_note(note).unwrap();
+                        self.ctx
+                            .data
+                            .db
+                            .replace_note(note, UpdateSource::LocalEdit)
+                            .unwrap();
                     }
                 }
             }

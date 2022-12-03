@@ -18,3 +18,5 @@ log = "0.4.17"
 ruslin-data = { path = "./ruslin-data" }
 dirs = "4.0.0"
 tracker = "0.1.2"
+tokio = { version = "1.22.0", features = ["full"] }
+reqwest = { version = "0.11.13", features = ["json"] }

@@ -2,7 +2,7 @@ use adw::prelude::*;
 use relm4::{
     factory::FactoryVecDeque, gtk, prelude::*, ComponentParts, ComponentSender, SimpleComponent,
 };
-use ruslin_data::{AbbrNote, FolderID, NoteID};
+use ruslin_data::AbbrNote;
 
 use crate::{icons, AppContext};
 
@@ -59,7 +59,7 @@ impl FactoryComponent for NoteItemModel {
 pub struct NoteListColumnModel {
     ctx: AppContext,
     notes: FactoryVecDeque<NoteItemModel>,
-    folder_id: Option<FolderID>,
+    folder_id: Option<String>,
 }
 
 pub struct NoteListColumInit {
@@ -68,15 +68,15 @@ pub struct NoteListColumInit {
 
 #[derive(Debug)]
 pub enum NoteListColumnInput {
-    RefreshNotes(Option<FolderID>),
+    RefreshNotes { folder_id: Option<String> },
     SelectNote(usize),
     CreateNote,
 }
 
 #[derive(Debug)]
 pub enum NoteListColumnOutput {
-    SelectNote(NoteID),
-    CreateNote(Option<FolderID>),
+    SelectNote { id: String },
+    CreateNote { folder_id: Option<String> },
 }
 
 #[relm4::component(pub)]
@@ -145,19 +145,21 @@ impl SimpleComponent for NoteListColumnModel {
 
     fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>) {
         match input {
-            NoteListColumnInput::RefreshNotes(folder_id) => {
+            NoteListColumnInput::RefreshNotes { folder_id } => {
                 self.reload_notes(folder_id);
             }
             NoteListColumnInput::SelectNote(index) => {
                 sender
-                    .output(NoteListColumnOutput::SelectNote(
-                        self.notes.get(index).unwrap().abbr_note.id.clone(),
-                    ))
+                    .output(NoteListColumnOutput::SelectNote {
+                        id: self.notes.get(index).unwrap().abbr_note.id.clone(),
+                    })
                     .unwrap();
             }
             NoteListColumnInput::CreateNote => {
                 sender
-                    .output(NoteListColumnOutput::CreateNote(self.folder_id.clone()))
+                    .output(NoteListColumnOutput::CreateNote {
+                        folder_id: self.folder_id.clone(),
+                    })
                     .unwrap();
             }
         }
@@ -165,14 +167,14 @@ impl SimpleComponent for NoteListColumnModel {
 }
 
 impl NoteListColumnModel {
-    fn reload_notes(&mut self, folder_id: Option<FolderID>) {
+    fn reload_notes(&mut self, folder_id: Option<String>) {
         let mut notes_guard = self.notes.guard();
         notes_guard.clear();
         for note in self
             .ctx
             .data
             .db
-            .load_abbr_notes(folder_id.as_ref())
+            .load_abbr_notes(folder_id.as_deref())
             .unwrap()
         {
             notes_guard.push_back(note);

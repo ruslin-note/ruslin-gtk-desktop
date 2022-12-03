@@ -8,7 +8,7 @@ use relm4::{
     prelude::*,
     ComponentParts, ComponentSender, SimpleComponent, Worker, WorkerController,
 };
-use ruslin_data::{Folder, FolderID};
+use ruslin_data::{sync::SyncResult, Folder, UpdateSource};
 
 use crate::{
     components::{EntryDialogInit, EntryDialogInput, EntryDialogModel, EntryDialogOutput},
@@ -83,7 +83,11 @@ impl Worker for FoldersHandler {
         match message {
             FoldersHandlerInput::InsertFolder { title } => {
                 let folder = Folder::new(title, None);
-                self.ctx.data.db.replace_folder(&folder).unwrap();
+                self.ctx
+                    .data
+                    .db
+                    .replace_folder(&folder, UpdateSource::LocalEdit)
+                    .unwrap();
                 let folders = self.load_folders();
                 sender
                     .output(SidebarColumnInput::ReloadFolers(folders))
@@ -102,7 +106,8 @@ impl Worker for FoldersHandler {
 pub struct SidebarColumnModel {
     folders: FactoryVecDeque<FolderItemModel>,
     add_note_dialog: Controller<EntryDialogModel>,
-    _worker: WorkerController<FoldersHandler>,
+    worker: WorkerController<FoldersHandler>,
+    ctx: AppContext,
 }
 
 pub struct SidebarColumnInit {
@@ -115,11 +120,17 @@ pub enum SidebarColumnInput {
     SelectAllFolders,
     ShowAddNoteDialog,
     ReloadFolers(Vec<Folder>),
+    SyncRemote,
+}
+
+#[derive(Debug)]
+pub enum SidebarColumnCommand {
+    SyncRemote(SyncResult<()>),
 }
 
 #[derive(Debug)]
 pub enum SidebarColumnOutput {
-    OpenFolder(Option<FolderID>),
+    OpenFolder { folder_id: Option<String> },
 }
 
 relm4::new_action_group!(pub(super) WindowActionGroup, "win");
@@ -129,11 +140,12 @@ relm4::new_stateless_action!(AboutAction, WindowActionGroup, "about");
 relm4::new_stateless_action!(AddFolderAction, WindowActionGroup, "add-folder");
 
 #[relm4::component(pub)]
-impl SimpleComponent for SidebarColumnModel {
+impl Component for SidebarColumnModel {
     type Init = SidebarColumnInit;
     type Input = SidebarColumnInput;
     type Output = SidebarColumnOutput;
     type Widgets = ComponentWidgets;
+    type CommandOutput = SidebarColumnCommand;
 
     menu! {
         primary_menu: {
@@ -157,6 +169,13 @@ impl SimpleComponent for SidebarColumnModel {
 
             #[name = "folder_sidebar_header"]
             adw::HeaderBar {
+                pack_start = &gtk::Button {
+                    set_icon_name: icons::view_refresh_symbolic(),
+                    connect_clicked[sender] => move |_| {
+                        sender.input(SidebarColumnInput::SyncRemote);
+                    }
+                },
+
                 #[wrap(Some)]
                 set_title_widget = &adw::WindowTitle {
                 },
@@ -215,7 +234,7 @@ impl SimpleComponent for SidebarColumnModel {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let worker = FoldersHandler::builder()
-            .detach_worker(init.ctx)
+            .detach_worker(init.ctx.clone())
             .forward(sender.input_sender(), identity);
         let folders = FactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
         let add_note_dialog = EntryDialogModel::builder()
@@ -230,7 +249,8 @@ impl SimpleComponent for SidebarColumnModel {
         let model = SidebarColumnModel {
             folders,
             add_note_dialog,
-            _worker: worker,
+            worker,
+            ctx: init.ctx,
         };
 
         let folder_list_box = model.folders.widget();
@@ -249,7 +269,7 @@ impl SimpleComponent for SidebarColumnModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>) {
+    fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>, root: &Self::Root) {
         match input {
             SidebarColumnInput::ReloadFolers(folders) => {
                 let mut folders_guard = self.folders.guard();
@@ -260,30 +280,46 @@ impl SimpleComponent for SidebarColumnModel {
             }
             SidebarColumnInput::SelectAllFolders => {
                 sender
-                    .output(SidebarColumnOutput::OpenFolder(None))
+                    .output(SidebarColumnOutput::OpenFolder { folder_id: None })
                     .unwrap();
             }
             SidebarColumnInput::SelectFolderIndex(index) => {
                 sender
-                    .output(SidebarColumnOutput::OpenFolder(Some(
-                        self.folders.get(index as usize).unwrap().folder.id.clone(),
-                    )))
+                    .output(SidebarColumnOutput::OpenFolder {
+                        folder_id: Some(
+                            self.folders.get(index as usize).unwrap().folder.id.clone(),
+                        ),
+                    })
                     .unwrap();
             }
             SidebarColumnInput::ShowAddNoteDialog => {
                 self.add_note_dialog.emit(EntryDialogInput::Show);
             }
+            SidebarColumnInput::SyncRemote => {
+                let data = self.ctx.data.clone();
+                sender.oneshot_command(async move {
+                    SidebarColumnCommand::SyncRemote(data.sync().await)
+                });
+            }
+        }
+    }
+
+    fn update_cmd(
+        &mut self,
+        message: Self::CommandOutput,
+        sender: ComponentSender<Self>,
+        root: &Self::Root,
+    ) {
+        match message {
+            SidebarColumnCommand::SyncRemote(result) => match result {
+                Ok(_) => {
+                    log::info!("sync success!");
+                    self.worker.emit(FoldersHandlerInput::ReloadFolers);
+                }
+                Err(e) => {
+                    log::error!("sync fail: {:?}", e);
+                }
+            },
         }
     }
 }
-
-// impl SidebarColumnModel {
-//     fn reload_folders(&mut self) {
-//         // TODO: async & result
-// let mut folders_guard = self.folders.guard();
-// folders_guard.clear();
-// for folder in self.ctx.data.db.load_folders().unwrap() {
-//     folders_guard.push_back(folder);
-// }
-//     }
-// }

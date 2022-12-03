@@ -4,6 +4,7 @@ mod app;
 mod components;
 mod content_page;
 mod icons;
+mod login_page;
 mod modals;
 mod properties;
 mod setup;
@@ -18,7 +19,7 @@ use relm4::{
 
 use app::App;
 pub use app::AppContext;
-use ruslin_data::RuslinData;
+use ruslin_data::{sync::SyncConfig, RuslinData};
 use setup::setup;
 
 use crate::{app::AppInit, config::APP_ID};

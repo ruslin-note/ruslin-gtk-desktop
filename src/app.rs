@@ -11,17 +11,21 @@ use relm4::{
 
 use crate::config::{APP_ID, PROFILE};
 use crate::content_page::{ContentPageInit, ContentPageModel};
+use crate::login_page::{LoginPageModel, LoginPageOutput};
 use crate::modals::about::AboutDialog;
 use ruslin_data::RuslinData;
 
-pub(super) struct App {
+pub struct App {
     about_dialog: Controller<AboutDialog>,
     content_page: Controller<ContentPageModel>,
+    login_page: Controller<LoginPageModel>,
+    ctx: AppContext,
 }
 
 #[derive(Debug)]
-pub(super) enum AppMsg {
+pub enum AppMsg {
     Quit,
+    RefreshPageStack,
 }
 
 relm4::new_action_group!(pub(super) WindowActionGroup, "win");
@@ -79,7 +83,12 @@ impl SimpleComponent for App {
                     None
                 },
 
-            set_content: Some(model.content_page.widget()),
+            #[wrap(Some)]
+            set_content: stack = &gtk::Stack {
+                set_transition_type: gtk::StackTransitionType::None,
+                add_child: model.login_page.widget(),
+                add_child: model.content_page.widget(),
+            },
         }
     }
 
@@ -94,12 +103,23 @@ impl SimpleComponent for App {
             .detach();
 
         let content_page = ContentPageModel::builder()
-            .launch(ContentPageInit { ctx: init.ctx })
+            .launch(ContentPageInit {
+                ctx: init.ctx.clone(),
+            })
             .detach();
+
+        let login_page = LoginPageModel::builder().launch(init.ctx.clone()).forward(
+            sender.input_sender(),
+            |msg| match msg {
+                LoginPageOutput::LoginSuccess => AppMsg::RefreshPageStack,
+            },
+        );
 
         let model = Self {
             about_dialog,
             content_page,
+            login_page,
+            ctx: init.ctx,
         };
 
         let widgets = view_output!();
@@ -129,17 +149,32 @@ impl SimpleComponent for App {
 
         widgets.load_window_size();
 
+        sender.input(AppMsg::RefreshPageStack);
+
         ComponentParts { model, widgets }
     }
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
             AppMsg::Quit => main_application().quit(),
+            AppMsg::RefreshPageStack => {}
         }
     }
 
     fn shutdown(&mut self, widgets: &mut Self::Widgets, _output: relm4::Sender<Self::Output>) {
         widgets.save_window_size().unwrap();
+    }
+
+    fn pre_view() {
+        if model.ctx.data.sync_exists() {
+            stack.set_visible_child(model.content_page.widget());
+        } else {
+            stack.set_visible_child(model.login_page.widget());
+        }
+    }
+
+    fn post_view() {
+        stack.set_transition_type(gtk::StackTransitionType::SlideLeft);
     }
 }
 

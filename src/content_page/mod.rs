@@ -11,7 +11,6 @@ use relm4::{
 
 use note_editor_column::NoteEditorColumnModel;
 use note_list_column::NoteListColumnModel;
-use ruslin_data::FolderID;
 use sidebar_column::SidebarColumnModel;
 
 use crate::{
@@ -38,7 +37,7 @@ pub struct ContentPageInit {
 
 #[derive(Debug)]
 pub enum ContentPageInput {
-    OpenFolder(Option<FolderID>),
+    OpenFolder { folder_id: Option<String> },
 }
 
 #[relm4::component(pub)]
@@ -101,19 +100,17 @@ impl SimpleComponent for ContentPageModel {
             })
             .forward(note_editor_column.sender(), |msg| match msg {
                 // Is it ok to forward a subcomponent directly to another subcomponent?
-                NoteListColumnOutput::SelectNote(note_id) => {
-                    NoteEditorColumnInput::OpenNote(note_id)
-                }
-                NoteListColumnOutput::CreateNote(folder_id) => {
-                    NoteEditorColumnInput::CreateNote(folder_id)
+                NoteListColumnOutput::SelectNote { id } => NoteEditorColumnInput::OpenNote { id },
+                NoteListColumnOutput::CreateNote { folder_id } => {
+                    NoteEditorColumnInput::CreateNote { folder_id }
                 }
             });
 
         let sidebar_column = sidebar_column::SidebarColumnModel::builder()
             .launch(SidebarColumnInit { ctx: init.ctx })
             .forward(sender.input_sender(), |msg| match msg {
-                SidebarColumnOutput::OpenFolder(folder_id) => {
-                    ContentPageInput::OpenFolder(folder_id)
+                SidebarColumnOutput::OpenFolder { folder_id } => {
+                    ContentPageInput::OpenFolder { folder_id }
                 }
             });
 
@@ -182,10 +179,10 @@ impl SimpleComponent for ContentPageModel {
 
     fn update(&mut self, input: Self::Input, _sender: ComponentSender<Self>) {
         match input {
-            ContentPageInput::OpenFolder(notes) => {
+            ContentPageInput::OpenFolder { folder_id } => {
                 self.note_list_column
                     .sender()
-                    .send(NoteListColumnInput::RefreshNotes(notes))
+                    .send(NoteListColumnInput::RefreshNotes { folder_id })
                     .unwrap();
             }
         }
