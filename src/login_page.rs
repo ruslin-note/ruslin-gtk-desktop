@@ -58,6 +58,16 @@ impl Component for LoginPageModel {
                 gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
 
+                    gtk::Label {
+                        set_justify: gtk::Justification::Center,
+                        set_ellipsize: gtk::pango::EllipsizeMode::End,
+                        set_margin_top: 10,
+                        set_margin_bottom: 30,
+                        add_css_class: "title-1",
+                        set_lines: 2,
+                        set_label: "Please log into Joplin Server and enjoy using Ruslin",
+                    },
+
                     adw::PreferencesGroup {
                         adw::EntryRow {
                             set_title: "URL",

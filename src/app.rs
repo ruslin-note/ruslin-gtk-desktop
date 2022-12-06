@@ -62,6 +62,8 @@ impl SimpleComponent for App {
 
     view! {
         main_window = adw::ApplicationWindow::new(&main_application()) {
+            set_width_request: 380,
+
             connect_close_request[sender] => move |_| {
                 sender.input(AppMsg::Quit);
                 gtk::Inhibit(true)
