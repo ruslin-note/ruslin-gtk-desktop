@@ -6,9 +6,12 @@ use relm4::{
     factory::FactoryVecDeque,
     gtk,
     prelude::*,
-    ComponentParts, ComponentSender, SimpleComponent, Worker, WorkerController,
+    ComponentParts, ComponentSender, Worker, WorkerController,
 };
-use ruslin_data::{sync::SyncResult, Folder, UpdateSource};
+use ruslin_data::{
+    sync::{SyncInfo, SyncResult},
+    Folder, UpdateSource,
+};
 
 use crate::{
     components::{EntryDialogInit, EntryDialogInput, EntryDialogModel, EntryDialogOutput},
@@ -125,7 +128,7 @@ pub enum SidebarColumnInput {
 
 #[derive(Debug)]
 pub enum SidebarColumnCommand {
-    SyncRemote(SyncResult<()>),
+    SyncRemote(SyncResult<SyncInfo>),
 }
 
 #[derive(Debug)]
@@ -269,7 +272,7 @@ impl Component for SidebarColumnModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>, root: &Self::Root) {
+    fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match input {
             SidebarColumnInput::ReloadFolers(folders) => {
                 let mut folders_guard = self.folders.guard();
@@ -307,8 +310,8 @@ impl Component for SidebarColumnModel {
     fn update_cmd(
         &mut self,
         message: Self::CommandOutput,
-        sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _sender: ComponentSender<Self>,
+        _root: &Self::Root,
     ) {
         match message {
             SidebarColumnCommand::SyncRemote(result) => match result {

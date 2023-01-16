@@ -19,7 +19,7 @@ use relm4::{
 
 use app::App;
 pub use app::AppContext;
-use ruslin_data::{sync::SyncConfig, RuslinData};
+use ruslin_data::RuslinData;
 use setup::setup;
 
 use crate::{app::AppInit, config::APP_ID};

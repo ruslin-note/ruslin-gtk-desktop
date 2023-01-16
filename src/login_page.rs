@@ -1,5 +1,5 @@
 use adw::prelude::*;
-use relm4::{gtk, Component, ComponentParts, ComponentSender, RelmWidgetExt, SimpleComponent};
+use relm4::{gtk, Component, ComponentParts, ComponentSender, RelmWidgetExt};
 use ruslin_data::sync::{SyncConfig, SyncResult};
 
 use crate::AppContext;
@@ -123,7 +123,7 @@ impl Component for LoginPageModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>, root: &Self::Root) {
+    fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match input {
             LoginPageInput::ChangeUrl(url) => {
                 self.url = url;
@@ -152,7 +152,7 @@ impl Component for LoginPageModel {
         &mut self,
         message: Self::CommandOutput,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match message {
             LoginPageCommandOutput::LoginResult(result) => match result {
