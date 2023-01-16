@@ -5,12 +5,18 @@ on:
 
 name: CI
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   rustfmt:
     name: Rustfmt
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -24,15 +30,18 @@ jobs:
 
   flatpak:
     name: Flatpak
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: bilelmoussaoui/flatpak-github-actions:gnome-43
       options: --privileged
     steps:
-    - uses: actions/checkout@v2
-    - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v4
-      with:
-        bundle: ruslin.flatpak
-        manifest-path: build-aux/org.dianqk.ruslin.Devel.json
-        run-tests: true
-        cache-key: flatpak-builder-${{ github.sha }}
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+      - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v5
+        with:
+         bundle: ruslin.flatpak
+         manifest-path: build-aux/org.dianqk.ruslin.Devel.json
+         run-tests: true
+         cache-key: flatpak-builder-${{ github.sha }}
