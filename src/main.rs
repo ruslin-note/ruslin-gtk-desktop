@@ -64,9 +64,10 @@ fn main() {
 
     let data_dir = dirs::data_dir().unwrap();
     log::info!("data dir: {}", data_dir.display());
+    let resources_dir = data_dir.join("resources");
 
     let app_context = AppContext {
-        data: Arc::new(RuslinData::new(&data_dir).unwrap()),
+        data: Arc::new(RuslinData::new(&data_dir, &resources_dir).unwrap()),
     };
 
     app.run::<App>(AppInit { ctx: app_context });

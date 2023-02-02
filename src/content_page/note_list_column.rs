@@ -44,7 +44,7 @@ impl FactoryComponent for NoteItemModel {
 
                 gtk::Label {
                     #[watch]
-                    set_label: &self.abbr_note.updated_time.format_ymd_hms(),
+                    set_label: &self.abbr_note.user_updated_time.format_ymd_hms(),
                     add_css_class: "caption",
                 },
             }

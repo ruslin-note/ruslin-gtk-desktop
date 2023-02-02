@@ -301,7 +301,7 @@ impl Component for SidebarColumnModel {
             SidebarColumnInput::SyncRemote => {
                 let data = self.ctx.data.clone();
                 sender.oneshot_command(async move {
-                    SidebarColumnCommand::SyncRemote(data.sync().await)
+                    SidebarColumnCommand::SyncRemote(data.synchronize(false).await)
                 });
             }
         }
