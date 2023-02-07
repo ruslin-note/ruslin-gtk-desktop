@@ -8,7 +8,7 @@ use relm4::{
 };
 use ruslin_data::{
     sync::{SyncError, SyncInfo},
-    Folder,
+    DatabaseError, Folder,
 };
 
 use crate::{
@@ -54,10 +54,15 @@ impl FactoryComponent for FolderItemModel {
     }
 }
 
+#[tracker::track]
 pub struct SidebarColumnModel {
+    #[tracker::do_not_track]
     folders: FactoryVecDeque<FolderItemModel>,
+    #[tracker::do_not_track]
     add_note_dialog: Controller<EntryDialogModel>,
+    #[tracker::do_not_track]
     ctx: AppContext,
+    is_syncing: bool,
 }
 
 pub struct SidebarColumnInit {
@@ -79,7 +84,8 @@ pub enum SidebarColumnCommand {
     SyncSuccess(SyncInfo),
     ReloadFolders(Vec<Folder>),
     AddedFolder,
-    ToastError(SyncError),
+    ToastSyncError(SyncError),
+    ToastError(DatabaseError),
 }
 
 #[derive(Debug)]
@@ -127,6 +133,17 @@ impl Component for SidebarColumnModel {
                     set_icon_name: icons::view_refresh_symbolic(),
                     connect_clicked[sender] => move |_| {
                         sender.input(SidebarColumnInput::SyncRemote);
+                    },
+                    #[track = "model.changed(SidebarColumnModel::is_syncing())"]
+                    set_visible: !model.is_syncing,
+                },
+
+                pack_start = &gtk::Box {
+                    #[track = "model.changed(SidebarColumnModel::is_syncing())"]
+                    set_visible: model.is_syncing,
+                    set_margin_start: 10,
+                    gtk::Spinner {
+                        start: (),
                     }
                 },
 
@@ -202,6 +219,8 @@ impl Component for SidebarColumnModel {
             folders,
             add_note_dialog,
             ctx: init.ctx,
+            is_syncing: false,
+            tracker: 0,
         };
         sender.input(SidebarColumnInput::ReloadFolders);
 
@@ -221,6 +240,7 @@ impl Component for SidebarColumnModel {
     }
 
     fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
+        self.reset();
         match input {
             SidebarColumnInput::SelectAllNotes => {
                 sender
@@ -240,11 +260,12 @@ impl Component for SidebarColumnModel {
                 self.add_note_dialog.emit(EntryDialogInput::Show);
             }
             SidebarColumnInput::SyncRemote => {
+                self.set_is_syncing(true);
                 let data = self.ctx.data.clone();
                 sender.oneshot_command(async move {
                     match data.synchronize(false).await {
                         Ok(info) => SidebarColumnCommand::SyncSuccess(info),
-                        Err(e) => SidebarColumnCommand::ToastError(e),
+                        Err(e) => SidebarColumnCommand::ToastSyncError(e),
                     }
                 });
             }
@@ -252,14 +273,14 @@ impl Component for SidebarColumnModel {
                 let data = self.ctx.data.clone();
                 sender.spawn_oneshot_command(move || match data.db.insert_root_folder(title) {
                     Ok(_) => SidebarColumnCommand::AddedFolder,
-                    Err(e) => SidebarColumnCommand::ToastError(e.into()),
+                    Err(e) => SidebarColumnCommand::ToastError(e),
                 })
             }
             SidebarColumnInput::ReloadFolders => {
                 let data = self.ctx.data.clone();
                 sender.spawn_oneshot_command(move || match data.db.load_folders() {
                     Ok(folders) => SidebarColumnCommand::ReloadFolders(folders),
-                    Err(e) => SidebarColumnCommand::ToastError(e.into()),
+                    Err(e) => SidebarColumnCommand::ToastError(e),
                 })
             }
         }
@@ -271,8 +292,10 @@ impl Component for SidebarColumnModel {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        self.reset();
         match message {
             SidebarColumnCommand::SyncSuccess(_) => {
+                self.set_is_syncing(false);
                 sender.input(SidebarColumnInput::ReloadFolders);
             }
             SidebarColumnCommand::ReloadFolders(folders) => {
@@ -287,6 +310,10 @@ impl Component for SidebarColumnModel {
             }
             SidebarColumnCommand::ToastError(e) => {
                 todo!("{e}")
+            }
+            SidebarColumnCommand::ToastSyncError(_e) => {
+                self.set_is_syncing(false);
+                // todo!("{e}")
             }
         }
     }
