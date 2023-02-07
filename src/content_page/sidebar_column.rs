@@ -1,16 +1,14 @@
-use std::convert::identity;
-
 use adw::prelude::*;
 use relm4::{
     actions::{RelmAction, RelmActionGroup},
     factory::FactoryVecDeque,
     gtk,
     prelude::*,
-    ComponentParts, ComponentSender, Worker, WorkerController,
+    ComponentParts, ComponentSender,
 };
 use ruslin_data::{
-    sync::{SyncInfo, SyncResult},
-    Folder, UpdateSource,
+    sync::{SyncError, SyncInfo},
+    Folder,
 };
 
 use crate::{
@@ -56,60 +54,9 @@ impl FactoryComponent for FolderItemModel {
     }
 }
 
-struct FoldersHandler {
-    ctx: AppContext,
-}
-
-impl FoldersHandler {
-    fn load_folders(&self) -> Vec<Folder> {
-        self.ctx.data.db.load_folders().unwrap()
-    }
-}
-
-#[derive(Debug)]
-enum FoldersHandlerInput {
-    InsertFolder { title: String },
-    ReloadFolers,
-}
-
-impl Worker for FoldersHandler {
-    type Init = AppContext;
-    type Input = FoldersHandlerInput;
-    type Output = SidebarColumnInput;
-
-    fn init(init: Self::Init, sender: ComponentSender<Self>) -> Self {
-        sender.input(FoldersHandlerInput::ReloadFolers);
-        Self { ctx: init }
-    }
-
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
-        match message {
-            FoldersHandlerInput::InsertFolder { title } => {
-                let folder = Folder::new(title, None);
-                self.ctx
-                    .data
-                    .db
-                    .replace_folder(&folder, UpdateSource::LocalEdit)
-                    .unwrap();
-                let folders = self.load_folders();
-                sender
-                    .output(SidebarColumnInput::ReloadFolers(folders))
-                    .unwrap();
-            }
-            FoldersHandlerInput::ReloadFolers => {
-                let folders = self.load_folders();
-                sender
-                    .output(SidebarColumnInput::ReloadFolers(folders))
-                    .unwrap();
-            }
-        }
-    }
-}
-
 pub struct SidebarColumnModel {
     folders: FactoryVecDeque<FolderItemModel>,
     add_note_dialog: Controller<EntryDialogModel>,
-    worker: WorkerController<FoldersHandler>,
     ctx: AppContext,
 }
 
@@ -120,15 +67,19 @@ pub struct SidebarColumnInit {
 #[derive(Debug)]
 pub enum SidebarColumnInput {
     SelectFolderIndex(u32),
-    SelectAllFolders,
-    ShowAddNoteDialog,
-    ReloadFolers(Vec<Folder>),
+    SelectAllNotes,
+    ShowCreateFolderDialog,
     SyncRemote,
+    InsertFolder { title: String },
+    ReloadFolders,
 }
 
 #[derive(Debug)]
 pub enum SidebarColumnCommand {
-    SyncRemote(SyncResult<SyncInfo>),
+    SyncSuccess(SyncInfo),
+    ReloadFolders(Vec<Folder>),
+    AddedFolder,
+    ToastError(SyncError),
 }
 
 #[derive(Debug)]
@@ -211,7 +162,7 @@ impl Component for SidebarColumnModel {
                 connect_row_selected[sender, folder_list_box] => move |_, row| {
                     if row.is_some() {
                         folder_list_box.unselect_all();
-                        sender.input(SidebarColumnInput::SelectAllFolders);
+                        sender.input(SidebarColumnInput::SelectAllNotes);
                     }
                 }
             },
@@ -236,52 +187,42 @@ impl Component for SidebarColumnModel {
         root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let worker = FoldersHandler::builder()
-            .detach_worker(init.ctx.clone())
-            .forward(sender.input_sender(), identity);
-        let folders = FactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
+        let folders: FactoryVecDeque<FolderItemModel> =
+            FactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
         let add_note_dialog = EntryDialogModel::builder()
-            .transient_for(root)
+            .transient_for(&root)
             .launch(EntryDialogInit {
-                title: "Add Note".to_string(),
-                button_label: "Add".to_string(),
+                title: "Create Folder".to_string(),
+                button_label: "Create".to_string(),
             })
-            .forward(worker.sender(), |msg| match msg {
-                EntryDialogOutput::Text(title) => FoldersHandlerInput::InsertFolder { title },
+            .forward(sender.input_sender(), |msg| match msg {
+                EntryDialogOutput::Text(title) => SidebarColumnInput::InsertFolder { title },
             });
         let model = SidebarColumnModel {
             folders,
             add_note_dialog,
-            worker,
             ctx: init.ctx,
         };
+        sender.input(SidebarColumnInput::ReloadFolders);
 
         let folder_list_box = model.folders.widget();
         let widgets = view_output!();
 
         let add_group = RelmActionGroup::<WindowActionGroup>::new();
         let add_folder_action: RelmAction<AddFolderAction> = RelmAction::new_stateless(move |_| {
-            sender.input(SidebarColumnInput::ShowAddNoteDialog);
+            sender.input(SidebarColumnInput::ShowCreateFolderDialog);
         });
         add_group.add_action(&add_folder_action);
         let add_actions = add_group.into_action_group();
         widgets
             .main_view
             .insert_action_group("win", Some(&add_actions));
-
         ComponentParts { model, widgets }
     }
 
     fn update(&mut self, input: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match input {
-            SidebarColumnInput::ReloadFolers(folders) => {
-                let mut folders_guard = self.folders.guard();
-                folders_guard.clear();
-                for folder in folders.into_iter() {
-                    folders_guard.push_back(folder);
-                }
-            }
-            SidebarColumnInput::SelectAllFolders => {
+            SidebarColumnInput::SelectAllNotes => {
                 sender
                     .output(SidebarColumnOutput::OpenFolder { folder_id: None })
                     .unwrap();
@@ -295,14 +236,31 @@ impl Component for SidebarColumnModel {
                     })
                     .unwrap();
             }
-            SidebarColumnInput::ShowAddNoteDialog => {
+            SidebarColumnInput::ShowCreateFolderDialog => {
                 self.add_note_dialog.emit(EntryDialogInput::Show);
             }
             SidebarColumnInput::SyncRemote => {
                 let data = self.ctx.data.clone();
                 sender.oneshot_command(async move {
-                    SidebarColumnCommand::SyncRemote(data.synchronize(false).await)
+                    match data.synchronize(false).await {
+                        Ok(info) => SidebarColumnCommand::SyncSuccess(info),
+                        Err(e) => SidebarColumnCommand::ToastError(e),
+                    }
                 });
+            }
+            SidebarColumnInput::InsertFolder { title } => {
+                let data = self.ctx.data.clone();
+                sender.spawn_oneshot_command(move || match data.db.insert_root_folder(title) {
+                    Ok(_) => SidebarColumnCommand::AddedFolder,
+                    Err(e) => SidebarColumnCommand::ToastError(e.into()),
+                })
+            }
+            SidebarColumnInput::ReloadFolders => {
+                let data = self.ctx.data.clone();
+                sender.spawn_oneshot_command(move || match data.db.load_folders() {
+                    Ok(folders) => SidebarColumnCommand::ReloadFolders(folders),
+                    Err(e) => SidebarColumnCommand::ToastError(e.into()),
+                })
             }
         }
     }
@@ -310,19 +268,26 @@ impl Component for SidebarColumnModel {
     fn update_cmd(
         &mut self,
         message: Self::CommandOutput,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match message {
-            SidebarColumnCommand::SyncRemote(result) => match result {
-                Ok(_) => {
-                    log::info!("sync success!");
-                    self.worker.emit(FoldersHandlerInput::ReloadFolers);
+            SidebarColumnCommand::SyncSuccess(_) => {
+                sender.input(SidebarColumnInput::ReloadFolders);
+            }
+            SidebarColumnCommand::ReloadFolders(folders) => {
+                let mut folders_guard = self.folders.guard();
+                folders_guard.clear();
+                for folder in folders.into_iter() {
+                    folders_guard.push_back(folder);
                 }
-                Err(e) => {
-                    log::error!("sync fail: {:?}", e);
-                }
-            },
+            }
+            SidebarColumnCommand::AddedFolder => {
+                sender.input(SidebarColumnInput::ReloadFolders);
+            }
+            SidebarColumnCommand::ToastError(e) => {
+                todo!("{e}")
+            }
         }
     }
 }
